@@ -1,6 +1,6 @@
 const truncate = require('../utils/truncate');
 const request = require('supertest');
-const {User} = require('../../src/app/models');
+const factory = require('../factories');
 const app = require('../../src/app');
 
 describe('Authentication', () => {
@@ -9,74 +9,87 @@ describe('Authentication', () => {
   });
 
   it('should authenticate with valid credentials', async () => {
-    const user = await User.create({
-      name: 'Ivan',
-      email: 'ivan@gmail.com',
-      password: '123456'
-    })
+    const user = await factory.create('User');
     
     const response = await request(app)
       .post('/sessions')
       .send({
         email: user.email,
-        password: '123456'
+        password: user.password
       });
 
     expect(response.status).toBe(200);
   });
 
   it('should not authenticate with invalid password', async () => {
-    const user = await User.create({
-      name: 'Ivan',
-      email: 'ivan@gmail.com',
-      password: '123456'
-    })
+    const user = await factory.create('User', {
+      password: '000000',
+    });
     
     const response = await request(app)
       .post('/sessions')
       .send({
         email: user.email,
-        password: '12345'
+        password: '123456'
       });
 
     expect(response.status).toBe(401);
   });
 
   it('should not authenticate with invalid email', async () => {
-    const user = await User.create({
-      name: 'Ivan',
-      email: 'ivan@gmail.com',
-      password: '123456'
-    })
-    
+    const user = await factory.create('User', {
+      email: 'email@user.com',
+    });
+
     const response = await request(app)
       .post('/sessions')
       .send({
         email: 'user@email.com',
-        password: '123456'
+        password: user.password
       });
 
     expect(response.status).toBe(404);
   });
 
   it('should return jwt token when authenticated', async () => {
-    const user = await User.create({
-      name: 'Ivan',
-      email: 'ivan@gmail.com',
-      password: '123456'
-    })
+    const user = await factory.create('User');
     
     const response = await request(app)
       .post('/sessions')
       .send({
         email: user.email,
-        password: '123456'
+        password: user.password
       });
-
-
 
     expect(response.body).toHaveProperty('token');
   });
 
+  it('should be able to access private route when authenticated', async () => {
+    const user = await factory.create('User');
+    
+    const response = await request(app)
+      .get('/dashboard')
+      .set('Authorization', `Bearer ${user.generateToken()}`);
 
+      expect(response.status).toBe(200);
+  });
+
+  it('should not be able to access private route without jwt token', async () => {
+    const user = await factory.create('User');
+    
+    const response = await request(app)
+      .get('/dashboard');
+
+    expect(response.status).toBe(401);
+  });
+
+  it('should not be able to access private route with invalid jwt token', async () => {
+    const user = await factory.create('User');
+    
+    const response = await request(app)
+      .get('/dashboard')
+      .set('Authorization', `Bearer 123456`);
+
+    expect(response.status).toBe(401);
+  });
 })
